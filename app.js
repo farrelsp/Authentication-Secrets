@@ -9,6 +9,7 @@ const session = require('express-session');
 const passport = require('passport');
 const passportLocalMongoose = require('passport-local-mongoose');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
 
 const app = express();
 
@@ -31,7 +32,8 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  facebookId: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -45,8 +47,6 @@ passport.serializeUser(function(user, cb) {
   process.nextTick(function() {
     return cb(null, {
       id: user.id,
-      username: user.username,
-      picture: user.picture
     });
   });
 });
@@ -72,6 +72,20 @@ function(accessToken, refreshToken, profile, cb) {
 }
 ));
 
+passport.use(new FacebookStrategy({
+  clientID: process.env.FACEBOOK_APP_ID,
+  clientSecret: process.env.FACEBOOK_APP_SECRET,
+  callbackURL: "http://localhost:3000/auth/facebook/secrets",
+},
+function(accessToken, refreshToken, profile, cb) {
+  console.log(profile);
+  
+  User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+    return cb(err, user);
+  });
+}
+));
+
 app.get("/", function(req, res) {
   res.render("home");
 });
@@ -82,6 +96,17 @@ app.get("/auth/google",
 
 app.get("/auth/google/secrets", 
   passport.authenticate("google", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect to secrets page
+    res.redirect('/secrets');
+});
+
+app.get('/auth/facebook',
+  passport.authenticate('facebook', { scope: ['public_profile'] })
+);
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
   function(req, res) {
     // Successful authentication, redirect to secrets page
     res.redirect('/secrets');
